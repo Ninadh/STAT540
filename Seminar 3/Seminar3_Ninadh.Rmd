@@ -1,0 +1,84 @@
+---
+title: "seminar3_Ninadh"
+author: "Ninadh"
+date: "1/23/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+source("https://bioconductor.org/biocLite.R")
+```
+
+```{r}
+biocLite("GEOquery")
+biocLite("biomaRt")
+```
+
+```{r}
+library(GEOquery)
+library(biomaRt)
+```
+
+```{r}
+library(tidyverse)
+library(reshape2)
+```
+
+
+GDS - stores curated matrices that are GSM objects in an "analysis-ready" format
+
+The first thing we are going to do is download a dataset from the Gene Expression Omnibus (GEO) repository using the GEOquery package. This experiment is exploring gene expression differences between renal cell carcinoma cells (RCC) and adjacent normal cells using an Affymetric array. We are going to download data in the GDS format, as it is already in a nice table for us. Note: you can download any type of GEO data you want using the getGEO function.
+
+```{r}
+gds <- getGEO("GDS507")
+```
+
+```{r}
+#we can use str() to peak at the structure of a data object. 
+str(gds)
+```
+
+```{r}
+#we want to have sample and disease state "meta-data". from the appropriate slots above.
+meta_data <- data.frame(Sample = gds@dataTable@columns$sample, 
+												disease = gds@dataTable@columns$disease.state)
+```
+
+```{r}
+head(meta_data)
+```
+
+```{r}
+#gene expression data table
+gds_data <- gds@dataTable@table
+head(gds_data)
+```
+
+Just for fun - let's compute the average gene count in each sample.
+
+We will do this using a function called apply() in base R.
+
+```{r}
+#We exclude the first and second columns because they hold the probe and gene names, respectively.
+#for this apply() function-- apply(X, MARGIN, FUN, ...)-- apply(dataset (specify rows.col), col, median)
+apply(gds_data[,-c(1, 2)], 2, median)
+```
+
+to tidy our gene data, melt() from reshape2
+
+```{r}
+melt(gds_data, id.vars = c("ID_REF", "IDENTIFIER"), var = "Sample")
+
+```
+
+```{r}
+
+```
+
+
+
+

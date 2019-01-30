@@ -26,6 +26,7 @@ library(biomaRt)
 ```{r}
 library(tidyverse)
 library(reshape2)
+library(dplyr)
 ```
 
 
@@ -68,16 +69,116 @@ We will do this using a function called apply() in base R.
 apply(gds_data[,-c(1, 2)], 2, median)
 ```
 
-to tidy our gene data, melt() from reshape2
+to tidy our gene data, melt() from reshape2. the data set is "melted" down to a tidier version
 
 ```{r}
 melt(gds_data, id.vars = c("ID_REF", "IDENTIFIER"), var = "Sample")
-
+melted_data <- melt(gds_data, id.vars = c("ID_REF", "IDENTIFIER"), var = "Sample")
 ```
+
+Let's calculate the mean gene expression per sample.
 
 ```{r}
+melted_data %>%
+group_by(Sample) %>%
+summarize(mean = mean(value))
+```
+
+Another thing we note is that there are multiple probes that map to a specific gene. In a real life analysis workflow, there are multiple ways to deal with this. Some popular options include picking the probe with the highest expression, or taking the mean/median of all probes' expression. For simplicity, we will use summarize() to take the mean of each probe's expression.
+
+```{r}
+# here different probe against the same gene is averaged
+(new_melted_data <- melted_data %>% 
+    group_by(Sample, IDENTIFIER) %>% 
+    summarize(Count = mean(value)))
+```
+
+
+
+```{r}
+#open connection between biomaRt and R.
+human = useMart("ensembl", dataset = "hsapiens_gene_ensembl")
+```
+
+
+```{r}
+#function that takes in data frame, and outputs same data frame with associated chromosome annotations.
+identify_gene_names <- function(df){
+	names(df) <- c("Sample", "hgnc_symbol", "Count")
+	names <- getBM( attributes=c("hgnc_symbol", "chromosome_name") , filters= "hgnc_symbol", values = unique(df$hgnc_symbol), mart = human)
+	left_join(df, names, by = "hgnc_symbol")
+}
+```
+
+
+```{r}
+#There's a lot of variation in how the chromosomal location is annotated. To simplify things, let's filter out all genes with annotations that are not numeric numbers between 1 and 23, X or Y. 
+data_with_chromosome <- identify_gene_names(new_melted_data) %>% 
+	filter(chromosome_name %in% c(1:23, "X", "Y"))
+```
+
+Part 2: Exercise
+To see the average expression of genes on the X chromosome changes between RCC and normal cells.
+
+combine meta_data with expression data (data_with_chromosome)
+
+```{r}
+full_data <- left_join(data_with_chromosome, meta_data, by = "Sample")
+```
+
+group all samples by disease status, filter all X-chromosome genes, and then calcualte the mean using summarize().
+
+```{r}
+#this will combine the overall gene expression mean of RCC and normal
+full_data %>%
+	group_by(disease) %>%
+	filter(chromosome_name == "X") %>%
+	summarise(mean = mean(Count))
+```
+
+Part 3: Graphical expression of the data
+Because we can't graph all of the probes, let's choose a random sampling of 100
+
+```{r}
+#choose random number between 1 and however many genes we have. 
+set.seed(5747540) # 5747540 is a random num from total num of genes
+
+#to randomly chose the samples based on row num
+sample_to_choose <- sample(1:length(unique(full_data$hgnc_symbol)), size = 100)
+
+#to randomly choose genes that correspond to those numbers in a list of genes. 
+names_to_choose <- as.character(unique(full_data$hgnc_symbol)[sample_to_choose])
+```
+
+to plot the data of the randomly selected genes
+
+```{r}
+full_data %>% 
+    filter(hgnc_symbol %in% names_to_choose) %>% 
+    group_by(Sample) %>% 
+    ggplot(aes(x = as.factor(chromosome_name), y = Count)) + geom_point()
 
 ```
+
+Part 3: Exercise
+By adding one additional function to the code above, calculate the sum of all counts in each sample and divide each expression value by that sum (hint: use mutate). Remember, you can add multiple new columns using mutate by separating each column with a comma (i.e mutate(x = c("a", "b"), y = c("d", "c"))). Plot this new transformed column.
+
+```{r}
+mean_full_data <- full_data %>% 
+    dplyr::filter(hgnc_symbol %in% names_to_choose) %>% 
+    group_by(Sample) %>% 
+	summarise(sum = sum(Count))
+
+left_join(full_data, mean_full_data, by = "Sample") %>% 
+	mutate(norm = Count/sum) %>% 
+	ggplot(aes(x = as.factor(chromosome_name), y = norm)) +
+	geom_point()
+
+
+```
+
+
+
 
 
 

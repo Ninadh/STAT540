@@ -177,9 +177,55 @@ left_join(full_data, mean_full_data, by = "Sample") %>%
 
 ```
 
+```{r}
+full_data %>% 
+    group_by(Sample) %>% 
+	summarise(sum = sum(Count)) # this will add all the Counts of gene
+```
+
+```{r}
+#assigning the above data set
+mean_full_data <- full_data %>% 
+    dplyr::filter(hgnc_symbol %in% names_to_choose) %>% 
+    group_by(Sample) %>% 
+	summarise(sum = sum(Count))
+```
 
 
+```{r}
+#combining the two data set by left_join. now there is a new col named "norm" which is "Count" divided by "sum" col
+left_join(full_data, mean_full_data, by = "Sample") %>% 
+	mutate(norm = Count/sum) 
 
+```
+
+```{r}
+#plotting the data
+left_join(full_data, mean_full_data, by = "Sample") %>% 
+	mutate(norm = Count/sum) %>% 
+	ggplot(aes(x = as.factor(chromosome_name), y = norm)) +
+	geom_point()
+
+```
+
+Part 4
+
+
+```{r}
+full_data %>% 
+    group_by(hgnc_symbol) %>% 
+    summarize( pvalue = t.test(Count ~ disease)$p.value) %>% # comparing RCC with normal
+	filter(pvalue < 0.05) %>% 
+	ggplot(aes(pvalue)) + # geom_density doesnt need y-axis specification
+	geom_density()
+
+
+```
+
+
+```{r}
+
+```
 
 
 

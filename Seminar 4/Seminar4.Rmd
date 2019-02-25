@@ -1,0 +1,112 @@
+---
+title: "Seminar4_Ninadh"
+author: "Ninadh"
+date: "February 6, 2019"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+library(reshape2)
+library(knitr)
+```
+
+
+```{r}
+data<- read_tsv("~/Desktop/STAT540/STAT540_Ninadh/datasets/GSE4051_data.tsv")
+```
+
+
+```{r}
+expressionMatrix <- read.table("datasets/GSE4051_data.tsv", #location of data
+															 stringsAsFactors = FALSE, # considers the col as is, not factor
+															 sep = "\t", # how the data are separated, t=tab
+															 quote = "") #some samples also have quotes
+```
+
+
+```{r}
+expressionMatrix <- expressionMatrix %>% 
+	rownames_to_column("gene") # rownames deprecated in tibbles and are hard to work with 
+expressionMatrix <- expressionMatrix %>% 
+	as_tibble() # turn into tibble for pretty printing
+expressionMatrix
+```
+
+```{r}
+samplesMetadata <- read.table("datasets/GSE4051_design.tsv",
+sep = "\t",
+header = TRUE, # set header = TRUE to use the first row of the data as column names
+stringsAsFactors = FALSE) # set stringAsFactors to avoid setting everything as factors
+```
+
+```{r}
+samplesMetadata <- samplesMetadata %>% 
+	as_tibble() # turn into tibble for pretty printing
+samplesMetadata
+```
+
+```{r}
+# define our own column names for samples metadata for clarity
+#same thing as above but would have been diffrent if we wanted specific cols
+names(samplesMetadata) <- c("sample_id", "sample_number", "dev_stage", "genotype")
+samplesMetadata
+```
+
+From the data, it looks like dev_stage and genotype could be made into factors. 
+
+Basically, factors are categorical variables. By declaring a variable as a factor, many operations on the categorical data becomes easier, such as making separate graphs for each categorical grouping. Generally, it is recommended to use factors where appropriate.
+
+```{r}
+samplesMetadata$dev_stage <- samplesMetadata$dev_stage %>% 
+	factor(levels = c("E16", "P2", "P6", "P10", "4_weeks"))
+
+samplesMetadata$dev_stage # note that Levels contain all possible categories of the variable
+```
+
+Converting genotype from characters to factors
+
+```{r}
+samplesMetadata$genotype <- samplesMetadata$genotype %>% 
+	factor(levels = c("wt", "NrlKO"))
+
+samplesMetadata$genotype # note that Levels contain all possible categories of the variable
+
+samplesMetadata
+```
+
+in the gene dataset there are 40 cols because one is "gene"
+
+```{r}
+expressionMatrix %>% 
+	ncol() - 1 # number of samples in the expression matrix (- column for genes)
+#now expression data and metadata matches
+```
+
+```{r}
+# melt into a format ggplot can easily work with
+meltedExpressionMatrix <- expressionMatrix %>% 
+	melt(id = "gene")
+
+meltedExpressionMatrix %>%
+ggplot(aes(x = variable, y = value)) +
+geom_boxplot() +
+theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+
+```{r}
+#this graph shows that genes with value ~7 is highest in all samples-- density
+meltedExpressionMatrix %>%
+ggplot(aes(x = value, color = variable)) +
+geom_density() +
+theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+
+
+
+
+
+
+

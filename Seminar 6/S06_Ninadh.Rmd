@@ -233,9 +233,60 @@ rect.hclust(pr.hc.w, k = 10) # to make boxes around the 10 clusters
 
 
 ```{r}
-
+par(op)
 ```
 
 
+```{r}
+# Save the heatmap to a PDF file
+pdf("GSE70213_Heatmap.pdf")
+pheatmap(data_to_plot, 
+				 cluster_rows = F, 
+				 scale = clust_scale, 
+				 clustering_method = clust_method,
+clustering_distance_cols = clust_dist_col, 
+annotation = prDes[, c("tissue", "genotype",
+"grp")], 
+annotation_colors = covar_color)
+dev.off()
+```
 
+#Part II: Parametric and Alternative Non-Parametric Clustering with PCA and t-SNE
+
+Partitioning methods for mice knockout data
+
+We can build clusters bottom-up from our data, via agglomerative hierarchical clustering. This method produces a dendrogram. As a different algorithmic approach, we can pre-determine the number of clusters (k), iteratively pick different 'cluster representatives', called centroids, and assign the closest remaining samples to it, until the solution converges to stable clusters. This way, we can find the best way to divide the data into the k clusters in this top-down
+
+clustering approach.
+The centroids can be determined by different means, as covered in lecture already. We will be covering two approaches, kmeans (implemented in kmeans function), and k-medoids (implemented in the pam function).
+
+Note that the results depend on the initial values (randomly generated) to create the first k clusters. In order to get the same results, you need to set many initial points (see the parameter nstart ).
+
+```{r}
+# Objects in columns
+set.seed(31)
+#to generate random numbers. impo to specify to have reproducibility. any other value will give a different value. #seed is determined by ??? parameters
+
+#Often, we have to try different 'k' values before we identify the most suitable k-means decomposition. We can look at the mutual information loss as clusters increase in count, to determine the number of clusters to use.
+k <- 5
+pr.km <- kmeans(t(data_to_plot), centers = k, nstart = 50)
+```
+
+#set.seed() : 
+Normally you might not need to set this; R will pick one. But if you are doing a "real" experiment and using methods that require random number generation, you should consider it when finalizing an analysis. The reason is that your results might come out slightly different each time you run it. To ensure that you can exactly reproduce the results later, you should set the seed (and record what you set it to). Of course if your results are highly sensitive to the choice of seed, that indicates a problem. In the case above, we're just choosing genes for an exercise so it doesn't matter, but setting the seed makes sure all students are looking at the same genes.
+
+```{r}
+# We can look at the within sum of squares of each cluster
+pr.km$withinss
+```
+
+```{r}
+# We can look at the composition of each cluster
+pr.kmTable <- data.frame(exptStage = prDes$grp, cluster = pr.km$cluster)
+kable(pr.kmTable)
+```
+
+#PAM algorithm
+
+In K-medoids clustering, K representative objects (= medoids) are chosen as cluster centers and objects are assigned to the center (= medoid = cluster) with which they have minimum dissimilarity (Kaufman and Rousseeuw, 1990). Nice features of partitioning around medoids (PAM) are: (a) it accepts a dissimilarity matrix (use diss = TRUE ). (b) it is more robust to outliers as the centroids of the clusters are data objects, unlike k-means.
 

@@ -157,12 +157,14 @@ Note that one can also usethe original data data and set the option scale = "row
 ```{r}
 # set pheatmap clustering parameters
 
-clust_dist_col = "euclidean" #‘'correlation'’ for Pearson correlation, ‘'euclidean'’, ‘'maximum'’, ‘'manhattan'’, ‘'canberra'’, 
-clust_method = "ward.D2" #‘'ward.D'’, ‘'ward.D2'’,‘'single'’, ‘'complete'’, ‘'average'’ (= UPGMA), ‘'mcquitty'’ (= WPGMA), ‘'
-clust_scale = "none" #'column', 'none', 'row'
+clust_dist_col = "euclidean" 
+#‘'correlation'’ for Pearson correlation, ‘'euclidean'’, ‘'maximum'’, ‘'manhattan'’, ‘'canberra'’, 
 
-## the annotation option uses the covariate object (prDes) we defined. It should
-## have the same rownames, as the colnames in our data object (data_to_plot).
+clust_method = "ward.D2" 
+#‘'ward.D'’, ‘'ward.D2'’,‘'single'’, ‘'complete'’, ‘'average'’ (= UPGMA), ‘'mcquitty'’ (= WPGMA), ‘'
+
+clust_scale = "none" 
+#'column', 'none', 'row'
 ```
 
 
@@ -170,13 +172,69 @@ clust_scale = "none" #'column', 'none', 'row'
 pheatmap(data_to_plot, 
 				 cluster_rows = FALSE, scale = clust_scale, 
 				 clustering_method = clust_method,
-clustering_distance_cols = clust_dist_col, , 
+clustering_distance_cols = clust_dist_col, # for dendogram based on col. can also be rows 
 show_colnames = T, show_rownames = FALSE,
 main = "Clustering heatmap for GSE70213", 
 annotation = prDes[, c("tissue", "genotype",
 "grp")])
+
+## the annotation option uses the covariate object (prDes) we defined. It should
+## have the same rownames, as the colnames in our data object (data_to_plot).
 ```
 
+We can also change the colours of the different covariates. As you see, this can help differentiate important variables and the clustering trends.
+
+```{r}
+## We can change the colours of the covariates
+var1 = c("orange1", "darkred")
+names(var1) = levels(prDes$tissue)
+
+var2 = c("grey", "black")
+names(var2) = levels(prDes$genotype)
+
+var3 = c("pink1", "pink3", "lightblue1", "blue3")
+names(var3) = levels(as.factor(prDes$grp))
+
+covar_color = list(tissue = var1, genotype = var2, grp = var3)
+```
+
+
+```{r}
+my_heatmap_obj = pheatmap(data_to_plot, 
+													cluster_rows = FALSE, 
+													scale = clust_scale,
+clustering_method = clust_method, 
+clustering_distance_cols = clust_dist_col,
+show_rownames = FALSE, 
+main = "Clustering heatmap for GSE70213", 
+annotation = prDes[,
+c("tissue", "genotype", "grp")], annotation_colors = covar_color)
+```
+
+#We can also get clusters from our pheatmap object. We will use the cutree function to extract the clusters. 
+Note that wecan do this for samples (look at the tree_col ) or for genes (look at the tree_row ).
+
+```{r}
+cluster_samples = cutree(my_heatmap_obj$tree_col, k = 10)
+# cluster_genes = cutree(my_heatmap_obj$tree_row, k=100)
+
+kable(cluster_samples)
+```
+
+Note you can do this with the base hclust method too, as shown here. We are using one of the hclust objects we defined earlier in this document.
+
+```{r}
+# identify 10 clusters
+op <- par(mar = c(1, 4, 4, 1))
+
+plot(pr.hc.w, labels = prDes$grp, cex = 0.6, main = "Ward showing 10 clusters")
+rect.hclust(pr.hc.w, k = 10) # to make boxes around the 10 clusters 
+```
+
+
+```{r}
+
+```
 
 
 

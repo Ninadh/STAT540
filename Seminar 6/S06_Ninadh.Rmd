@@ -1,0 +1,183 @@
+---
+title: "Seminar 6"
+author: "Ninadh"
+date: "February 27, 2019"
+output: html_document
+---
+
+#Seminar 6: Dimensionality reduction and Cluster Analysis-Hierarchical Clustering
+
+```{r}
+library(GEOquery)
+library(pvclust)
+library(xtable)
+library(limma)
+library(plyr)
+library(lattice)
+library(RCurl)
+library(knitr)
+library(pheatmap)
+```
+
+```{r}
+data <- read_tsv("~/Desktop/STAT540/STAT540_Ninadh/datasets/GSE4051_data.tsv")
+
+```
+
+```{r}
+if (file.exists("GSE70213.Rdata")) {
+# if previously downloaded
+load("GSE70213.Rdata")
+} else {
+
+	# Get geo object that contains our data and phenotype information
+geo_obj <- getGEO("GSE70213", GSEMatrix = TRUE)
+geo_obj <- geo_obj[[1]]
+save(geo_obj, file = "GSE70213.Rdata")
+}
+
+# Get expression data
+data <- exprs(geo_obj)
+
+# Get covariate data
+prDes <- pData(geo_obj)[, c("organism_ch1", "title", colnames(pData(geo_obj))[grep("characteristics",
+colnames(pData(geo_obj)))])]
+```
+
+
+```{r}
+## Clean up covariate data
+colnames(prDes) = c("organism", "sample_name", "tissue", "genotype", "sex", "age")
+prDes$tissue = as.factor(gsub("tissue: ", "", prDes$tissue))
+prDes$genotype = as.factor(gsub("genotype: ", "", prDes$genotype))
+prDes$sex = as.factor(gsub("Sex: ", "", prDes$sex))
+prDes$age = gsub("age: ", "", prDes$age)
+```
+
+
+```{r}
+kable(head(data[, 1:5]))
+```
+
+```{r}
+#dimention of the data
+dim(data)
+```
+ 24 col and 35557 rows
+
+```{r}
+kable(head(prDes))
+```
+
+
+
+
+```{r}
+# to check that #col matches
+dim(prDes)
+```
+
+```{r}
+#Now let us see how the gene values are spread across our dataset, with a frequency histogram (using base R).
+hist(data, col = "gray", main = "GSE70213 - Histogram")
+```
+
+It appears a lot of genes have values < 1000. What happens if we plot the frequency distribution after Log2 transformation?
+
+```{r}
+hist(log2(data + 1), col = "gray", main = "GSE70213 log transformed - Histogram")
+```
+
+Finally, as an additional step to make visualization easier later, we'll rescale the rows in our data object, since we're not interested in absolute differences in expression between genes at the moment. Note that although one can do this step within the pheatmap() function, it will not be available for other functions we will use. We can always go back to the original data if we need to.
+
+```{r}
+sprDat <- t(scale(t(data)))
+str(sprDat, max.level = 0, give.attr = FALSE)
+```
+
+```{r}
+round(data.frame(avgBefore = rowMeans(head(data)), avgAfter = rowMeans(head(sprDat)),
+varBefore = apply(head(data), 1, var), varAfter = apply(head(sprDat), 1, var)),
+2)
+```
+
+The data for each row -- which is for one probeset -- now has mean 0 and variance 1.
+
+Now, let us try and consider how the various samples cluster across all our genes. We will then try and do some featureselection, and see the effect it has on the clustering of the samples.We will use the covars object to annotate our clustersand identify interesting clusters. The second part of our analysis will focus on clustering the genes across all our samples.
+
+#Sample clustering
+
+In this part, we will use samples as objects to be clustered using gene attributes (i.e., vector variables of dimension ~35K). First we will cluster the data using agglomerative hierarchical clustering. Here, the partitions can be visualized using a dendrogram at various levels of granularity. We do not need to input the number of clusters, in this approach. Then, we will find various clustering solutions using partitional clustering methods, specifically K-means and partition around medoids (PAM). Here, the partitions are independent of each other, and the number of clusters is given as an input. As part of your take-home exercise, you will pick a specific number of clusters, and compare the sample memberships in these clusters across the various clustering methods. 
+
+## Part I: Hierarchical Clustering ### Hierarchical clustering for mice knockout data
+
+In this section we will illustrate different hierarchical clustering methods. These plots were included in Lecture 16. However, for most expression data applications, we suggest you should standardize the data; use Euclidean as the "distance" (so it's just like Pearson correlation) and use "average linkage".
+
+```{r}
+data_to_plot = sprDat
+# compute pairwise distances
+pr.dis <- dist(t(data_to_plot), method = "euclidean")
+```
+
+```{r}
+# create a new factor representing the interaction of tissue type and genotype
+prDes$grp <- with(prDes, interaction(tissue, genotype))
+summary(prDes$grp)
+```
+
+```{r}
+# compute hierarchical clustering using different linkage types
+pr.hc.s <- hclust(pr.dis, method = "single")
+pr.hc.c <- hclust(pr.dis, method = "complete")
+pr.hc.a <- hclust(pr.dis, method = "average")
+pr.hc.w <- hclust(pr.dis, method = "ward.D")
+```
+
+
+```{r}
+#plot
+#op <- par(mar = c(0, 4, 4, 2), mfrow = c(2, 2))
+# the above command is to view the graphs in a different format.
+
+plot(pr.hc.s, labels = FALSE, main = "Single", xlab = "")
+plot(pr.hc.c, labels = FALSE, main = "Complete", xlab = "")
+plot(pr.hc.a, labels = FALSE, main = "Average", xlab = "")
+plot(pr.hc.w, labels = FALSE, main = "Ward", xlab = "")
+```
+
+We can look at the trees that are output from different clustering algorithms. However, it can also be visually helpful to identify what sorts of trends in the data are associated with these clusters. We can look at this output using heatmaps. We will be using the pheatmap package for is purpose.
+
+When you call pheatmap() , it automatically performs hierarchical clustering for you and it reorders the rows and/or columns of the data accordingly. Both the reordering and the dendrograms can be suppressed with cluster_rows = FALSE and/or cluster_cols = FALSE . Note that when you have a lot of genes, the tree is pretty ugly. Thus, the row clustering was suppressed for now.
+
+By default, pheatmap() uses the hclust() function, which takes a distance matrix, calculated by the dist() function (with default = 'euclidean' ). However, you can also write your own clustering and distance functions. In the examples below, I used hclust() with ward linkage method and the euclidean distance.
+
+#Exercise: Play with the options of the pheatmap function and compare the different heatmaps.
+Note that one can also usethe original data data and set the option scale = "row" . You will get the same heatmaps although the columns may be ordered differently (use cluster_cols = FALSE to suppress reordering).
+
+```{r}
+# set pheatmap clustering parameters
+
+clust_dist_col = "euclidean" #‘'correlation'’ for Pearson correlation, ‘'euclidean'’, ‘'maximum'’, ‘'manhattan'’, ‘'canberra'’, 
+clust_method = "ward.D2" #‘'ward.D'’, ‘'ward.D2'’,‘'single'’, ‘'complete'’, ‘'average'’ (= UPGMA), ‘'mcquitty'’ (= WPGMA), ‘'
+clust_scale = "none" #'column', 'none', 'row'
+
+## the annotation option uses the covariate object (prDes) we defined. It should
+## have the same rownames, as the colnames in our data object (data_to_plot).
+```
+
+
+```{r}
+pheatmap(data_to_plot, 
+				 cluster_rows = FALSE, scale = clust_scale, 
+				 clustering_method = clust_method,
+clustering_distance_cols = clust_dist_col, , 
+show_colnames = T, show_rownames = FALSE,
+main = "Clustering heatmap for GSE70213", 
+annotation = prDes[, c("tissue", "genotype",
+"grp")])
+```
+
+
+
+
+

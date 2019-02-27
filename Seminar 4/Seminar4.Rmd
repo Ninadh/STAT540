@@ -9,6 +9,7 @@ output: html_document
 library(tidyverse)
 library(reshape2)
 library(knitr)
+library(dplyr)
 ```
 
 
@@ -18,7 +19,7 @@ data<- read_tsv("~/Desktop/STAT540/STAT540_Ninadh/datasets/GSE4051_data.tsv")
 
 
 ```{r}
-expressionMatrix <- read.table("datasets/GSE4051_data.tsv", #location of data
+expressionMatrix <- read.table("~/Desktop/STAT540/STAT540_Ninadh/datasets/GSE4051_data.tsv", #location of data
 															 stringsAsFactors = FALSE, # considers the col as is, not factor
 															 sep = "\t", # how the data are separated, t=tab
 															 quote = "") #some samples also have quotes
@@ -34,7 +35,7 @@ expressionMatrix
 ```
 
 ```{r}
-samplesMetadata <- read.table("datasets/GSE4051_design.tsv",
+samplesMetadata <- read.table("~/Desktop/STAT540/STAT540_Ninadh/datasets/GSE4051_design.tsv",
 sep = "\t",
 header = TRUE, # set header = TRUE to use the first row of the data as column names
 stringsAsFactors = FALSE) # set stringAsFactors to avoid setting everything as factors
@@ -102,6 +103,139 @@ ggplot(aes(x = value, color = variable)) +
 geom_density() +
 theme(axis.text.x = element_text(angle = 90, hjust = 1))
 ```
+
+
+Part 3: Single gene analysis
+
+differential expression of 1429226_at. We will plot the expression of this gene for every sample, grouped by genotype (wt vs. NrlKO).
+
+```{r}
+geneIds <- c("1416119_at", "1431708_a_at")
+
+# use dplyr::filter() to get the expression data for the gene
+expressionDataForGene <- expressionMatrix %>% 
+	filter(gene %in% geneIds)
+
+# transform the data frame into the format that matches the sample metadata
+expressionDataForGene <- expressionDataForGene %>%
+  as.data.frame() %>% 
+  column_to_rownames("gene") %>%
+  t() %>% as.data.frame() %>% 
+  rownames_to_column("sample_id") %>% 
+  melt(id = "sample_id") %>% 
+  as_tibble() %>% 
+  select(sample_id,
+         gene = variable, 
+         expression = value)
+
+expressionDataForGene
+
+
+```
+
+Assigning data trasformation code into a function:
+Actually, let's put this data transformation code into a function so that it can be reused; we will routinely need the dataset to be in this format as we perform analyses.
+
+knowing how to use functions greatly simplifies your code base. 
+
+```{r}
+transformGeneExpressionMatrix <- function(expressionMatrix) {
+  expressionMatrix <- expressionMatrix %>%
+    as.data.frame() %>% 
+    column_to_rownames("gene") %>%
+    t() %>% as.data.frame() %>% 
+    rownames_to_column("sample_id") %>% 
+    melt(id = "sample_id") %>% 
+    as_tibble() %>% 
+    select(sample_id,
+           gene = variable, 
+           expression = value)
+  return(expressionMatrix)
+}
+```
+
+
+```{r}
+# use dplyr::filter() to get the expression data for the gene
+expressionDataForGene <- expressionMatrix %>% 
+	filter(gene %in% geneIds)
+
+# this is the original expression matrix, consisting of only the one gene we filtered for
+expressionDataForGene
+```
+
+
+```{r}
+# now transformed
+expressionDataForGene <- transformGeneExpressionMatrix(expressionDataForGene)
+expressionDataForGene
+```
+
+Integrate the samples metadata by doing a join.
+The left_join() function ensures that all rows in the first data frame are retained while unmatched rows in the second data frame are dropped. Feel free to run ?join() in the R-Studio console to learn more as well as other variations of the function such as right_join(), inner_join(), full_join(), etc.
+
+```{r}
+expressionDataForGene <- expressionDataForGene %>% 
+	left_join(samplesMetadata, by = "sample_id")
+
+expressionDataForGene
+```
+
+Now, what we have is one data frame that contains all the metadata for all samples as well as the gene expression for the genes that we're interested in.
+
+Plots
+
+```{r}
+expressionDataForGene %>% 
+  ggplot(aes(x = expression, y = genotype, color = genotype)) + 
+  geom_point(size = 3, shape = 1) +
+  facet_wrap(~gene)
+```
+
+The two-group t-test
+
+Of course, eyeballing the data isn't always the best. We need a formal statistical test to tell us how much confidence we should have in the hit, and whether the boring gene is actually boring.
+
+And what's the statistical test is best suited for the scenario where we want to test whether two samples differ in their means? The t-test, of course, it's in the title, not that you needed this bit of help.
+
+Let's first do a t-test to compare the expression values across the two genotypes for the boring gene.
+
+```{r}
+boringGene <- expressionDataForGene %>% 
+	filter(gene == "1416119_at")
+
+t.test(expression ~ genotype, boringGene)
+#As expected, we obtain a p-value of >0.8. Not so significant. This gene is probably not differentially expressed across the two genotypes, as you suspected based on the plots above.
+```
+
+```{r}
+#now the interesting gene
+interestingGene <- expressionDataForGene %>% filter(gene == "1431708_a_at")
+t.test(expression ~ genotype, interestingGene)
+
+#And, we get a p-value < 7.381e-12. An extremely tiny p-value!... Suppose, we set the significance threshold at 0.001, this p-value is statistically significant. We can also see that the mean expression value between the two conditions of this gene ~=2.
+```
+
+The mighty linear regression
+What does the linear regression have to do with this? Turns out, everything. If you're not sure what I'm talking about, make sure to go back to the lectures slides! I would also recommend reading chapter 3 of An Introduction to Statistical Learning by Gareth et al.
+
+But essentially, the t-statistics is simply a formulation for testing the relationship between variables based on a linear fit.
+
+To drive the point home, see that we can perform the "t-test" using the linear model in R.
+
+```{r}
+#boring gene
+boringGene <- expressionDataForGene %>% 
+	filter(gene == "1416119_at")
+
+summary(lm(expression ~ genotype, boringGene))
+```
+
+
+
+
+
+
 
 
 
